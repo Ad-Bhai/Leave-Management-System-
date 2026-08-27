@@ -1,0 +1,153 @@
+/*
+ * LeaveManagementUtils.js
+ * ServiceNow Leave Management System
+ *
+ * This Script Include contains reusable server-side
+ * validation and leave-management functions.
+ */
+
+var LeaveManagementUtils = Class.create();
+
+LeaveManagementUtils.prototype = {
+
+    initialize: function() {},
+
+    // Calculate number of leave days
+    calculateLeaveDays: function(startDate, endDate) {
+
+        if (!startDate || !endDate) {
+            return 0;
+        }
+
+        var start = new GlideDateTime(startDate);
+        var end = new GlideDateTime(endDate);
+
+        if (end.before(start)) {
+            return 0;
+        }
+
+        var milliseconds =
+            end.getNumericValue() - start.getNumericValue();
+
+        var days =
+            Math.floor(
+                milliseconds / (1000 * 60 * 60 * 24)
+            ) + 1;
+
+        return days;
+    },
+
+    // Validate leave dates
+    validateDateRange: function(startDate, endDate) {
+
+        if (!startDate || !endDate) {
+            return {
+                valid: false,
+                message: "Start date and end date are required."
+            };
+        }
+
+        var start = new GlideDateTime(startDate);
+        var end = new GlideDateTime(endDate);
+
+        if (end.before(start)) {
+            return {
+                valid: false,
+                message: "End date cannot be before start date."
+            };
+        }
+
+        return {
+            valid: true,
+            message: "Valid leave date range."
+        };
+    },
+
+    // Check for overlapping leave requests
+    hasOverlappingLeave: function(
+        employeeId,
+        startDate,
+        endDate,
+        currentLeaveId
+    ) {
+
+        var leave = new GlideRecord(
+            'x_lms_leave_application'
+        );
+
+        leave.addQuery('employee', employeeId);
+
+        leave.addQuery(
+            'state',
+            'IN',
+            'Submitted,Approved'
+        );
+
+        if (currentLeaveId) {
+            leave.addQuery(
+                'sys_id',
+                '!=',
+                currentLeaveId
+            );
+        }
+
+        leave.addQuery(
+            'start_date',
+            '<=',
+            endDate
+        );
+
+        leave.addQuery(
+            'end_date',
+            '>=',
+            startDate
+        );
+
+        leave.query();
+
+        return leave.hasNext();
+    },
+
+    // Complete leave application validation
+    validateLeaveApplication: function(
+        employeeId,
+        startDate,
+        endDate,
+        currentLeaveId
+    ) {
+
+        var dateValidation =
+            this.validateDateRange(
+                startDate,
+                endDate
+            );
+
+        if (!dateValidation.valid) {
+            return dateValidation;
+        }
+
+        if (
+            this.hasOverlappingLeave(
+                employeeId,
+                startDate,
+                endDate,
+                currentLeaveId
+            )
+        ) {
+
+            return {
+                valid: false,
+                message:
+                    "The employee already has an overlapping leave request."
+            };
+        }
+
+        return {
+            valid: true,
+            message:
+                "Leave application is valid."
+        };
+    },
+
+    type: 'LeaveManagementUtils'
+};
